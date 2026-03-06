@@ -9,7 +9,6 @@ import Treeland
 OutputItem {
     id: rootOutputItem
     readonly property OutputViewport screenViewport: outputViewport
-    property alias wallpaperVisible: wallpaper.visible
     property bool forceSoftwareCursor: false
 
     devicePixelRatio: output?.scale ?? devicePixelRatio
@@ -94,18 +93,17 @@ OutputItem {
         }
     }
 
+
     Item {
         clip: true
         anchors.fill: parent
-        Wallpaper {
+        Item {
             id: wallpaper
-            output: rootOutputItem.output
-            workspace: Helper.workspace.current
-            anchors.fill: parent
-            fillMode: Image.PreserveAspectCrop
-            retainWhileLoading: true
-            clip: true
 
+            readonly property int duration: 1000
+            property Wallpaper currentWallpaper: fontWallpaper
+            clip: true
+            anchors.fill: parent
             states: [
                 State {
                     name: "Normal"
@@ -120,14 +118,150 @@ OutputItem {
                         target: wallpaper
                         scale: 1.4
                     }
+                },
+                State {
+                    name: "ScaleTo1.2"
+                    PropertyChanges {
+                        target: wallpaper
+                        scale: 1.2
+                    }
+                },
+                State {
+                    name: "ScaleWithoutAnimation"
+                    PropertyChanges {
+                        target: wallpaper
+                        scale: 1.4
+                    }
                 }
             ]
 
-            Behavior on scale {
-                enabled: GreeterProxy.showAnimation
-                NumberAnimation {
-                    duration: 1000
-                    easing.type: Easing.OutExpo
+            transitions: [
+                Transition {
+                    from: "*"
+                    to: "Normal"
+                    PropertyAnimation {
+                        property: "scale"
+                        duration: wallpaper.duration
+                        easing.type: Easing.OutExpo
+                    }
+                },
+                Transition {
+                    from: "*"
+                    to: "Scale"
+                    PropertyAnimation {
+                        property: "scale"
+                        duration: wallpaper.duration
+                        easing.type: Easing.OutExpo
+                    }
+                },
+                Transition {
+                    from: "*"
+                    to: "ScaleTo1.2"
+                    PropertyAnimation {
+                        property: "scale"
+                        duration: wallpaper.duration
+                        easing.type: Easing.OutExpo
+                    }
+                },
+                Transition {
+                    from: "*"
+                    to: "ScaleWithoutAnimation"
+                    PropertyAnimation {
+                        property: "scale"
+                        duration: 0
+                    }
+                }
+            ]
+
+            Wallpaper {
+                id: backWallpaper
+
+                anchors.fill: parent
+                disableUpdate: true
+                wallpaperRole: Wallpaper.Desktop
+                output: rootOutputItem.output
+                workspace: Helper.workspace.current
+                opacity: 0
+                live: false
+                z: 0
+                onSourceChanged: {
+                    wallpaper.currentWallpaper = backWallpaper
+
+                    backWallpaper.disableUpdate = true
+                    backWallpaper.live = true
+                    backWallpaper.z = 1
+                    backWallpaper.opacity = 1
+
+                    fontWallpaper.disableUpdate = false
+                    fontWallpaper.z = 0
+                    fontWallpaper.opacity = 0
+                }
+                Behavior on opacity {
+                    enabled: wallpaper.state = "Normal"
+                    NumberAnimation {
+                        duration: 500
+                        easing.type: Easing.InOutQuad
+                    }
+                }
+            }
+
+            Wallpaper {
+                id: fontWallpaper
+
+                anchors.fill: parent
+                wallpaperRole: Wallpaper.Desktop
+                output: rootOutputItem.output
+                workspace: Helper.workspace.current
+                z: 1
+                onSourceChanged: {
+                    wallpaper.currentWallpaper = fontWallpaper
+
+                    fontWallpaper.disableUpdate = true
+                    fontWallpaper.live = true
+                    fontWallpaper.z = 1
+                    fontWallpaper.opacity = 1
+
+                    backWallpaper.disableUpdate = false
+                    backWallpaper.live = false
+                    backWallpaper.z = 0
+                }
+
+                Behavior on opacity {
+                    enabled: wallpaper.state = "Normal"
+                    NumberAnimation {
+                        duration: 500
+                        easing.type: Easing.InOutQuad
+                    }
+                }
+            }
+
+            Connections {
+                target: Helper
+                function onLaunchpadMappedChanged(output, mapped) {
+                    if (output !== rootOutputItem.output) {
+                        return;
+                    }
+
+                    wallpaper.state = mapped ? "Scale" : "Normal"
+                }
+
+                function onShowDesktopRequested(output) {
+                    if (output !== rootOutputItem.output) {
+                        return;
+                    }
+
+                    wallpaper.state = "Normal"
+                    wallpaper.currentWallpaper.play = true
+                    wallpaper.currentWallpaper.slowDown()
+                }
+
+                function onStartLockscreened(output, showAnimation) {
+                    if (output !== rootOutputItem.output) {
+                        return;
+                    }
+
+                    wallpaper.currentWallpaper.play = false
+                    wallpaper.state = showAnimation ? "ScaleTo1.2" : "ScaleWithoutAnimation"
                 }
             }
         }
